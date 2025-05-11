@@ -4,26 +4,86 @@ import CipherHeader from './CipherHeader';
 import ShiftControl from './ShiftControl';
 import TextArea from './TextArea';
 import CipherToolbar from './CipherToolbar';
+import ModeSelector, { CipherMode } from './ModeSelector';
+import ModeParameters from './ModeParameters';
+import BruteForceResults from './BruteForceResults';
 import { caesarCipher, decryptCaesar } from '@/utils/caesarCipher';
+import { 
+  bruteForceCaesar, 
+  multiShiftCipher,
+  vigenereCipher,
+  customShiftPattern
+} from '@/utils/advancedCiphers';
 
 const CaesarCipher = () => {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
   const [shift, setShift] = useState(3);
   const [mode, setMode] = useState<'encrypt' | 'decrypt'>('encrypt');
+  const [cipherMode, setCipherMode] = useState<CipherMode>('caesar');
+  const [bruteForceResults, setBruteForceResults] = useState<{ shift: number; result: string }[]>([]);
+  const [modeParams, setModeParams] = useState({
+    keyword: 'CYBER',
+    shifts: [3, 5, 7],
+    pattern: [1, 3, 5]
+  });
 
-  // Process text whenever input, shift, or mode changes
+  // Process text whenever input, shift, mode, or cipher mode changes
   useEffect(() => {
-    if (inputText) {
-      if (mode === 'encrypt') {
-        setOutputText(caesarCipher(inputText, shift));
-      } else {
-        setOutputText(decryptCaesar(inputText, shift));
-      }
-    } else {
+    if (!inputText) {
       setOutputText('');
+      setBruteForceResults([]);
+      return;
     }
-  }, [inputText, shift, mode]);
+
+    // Process based on cipher mode
+    switch (cipherMode) {
+      case 'caesar':
+        // Standard Caesar cipher
+        if (mode === 'encrypt') {
+          setOutputText(caesarCipher(inputText, shift));
+        } else {
+          setOutputText(decryptCaesar(inputText, shift));
+        }
+        setBruteForceResults([]);
+        break;
+
+      case 'bruteforce':
+        // Only available in decrypt mode
+        if (mode === 'decrypt') {
+          const results = bruteForceCaesar(inputText);
+          setBruteForceResults(results);
+          // Set the first result as the output text
+          setOutputText(results.length > 0 ? results[0].result : '');
+        } else {
+          setOutputText('Switch to decrypt mode to use brute force');
+          setBruteForceResults([]);
+        }
+        break;
+
+      case 'multi-shift':
+        // Multi-shift cipher
+        setOutputText(multiShiftCipher(inputText, modeParams.shifts, mode));
+        setBruteForceResults([]);
+        break;
+
+      case 'vigenere':
+        // Vigenère cipher
+        setOutputText(vigenereCipher(inputText, modeParams.keyword, mode));
+        setBruteForceResults([]);
+        break;
+
+      case 'custom-pattern':
+        // Custom shift pattern
+        setOutputText(customShiftPattern(inputText, modeParams.pattern, mode));
+        setBruteForceResults([]);
+        break;
+
+      default:
+        setOutputText('');
+        setBruteForceResults([]);
+    }
+  }, [inputText, shift, mode, cipherMode, modeParams]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
@@ -33,10 +93,27 @@ const CaesarCipher = () => {
     setInputText('');
     setOutputText('');
     setShift(3);
+    setBruteForceResults([]);
   };
 
   const toggleMode = () => {
     setMode(mode === 'encrypt' ? 'decrypt' : 'encrypt');
+    // Clear brute force results when switching modes
+    setBruteForceResults([]);
+  };
+
+  const handleModeChange = (newMode: CipherMode) => {
+    setCipherMode(newMode);
+    // Reset brute force results when changing cipher mode
+    setBruteForceResults([]);
+  };
+
+  const handleParamsChange = (params: any) => {
+    setModeParams(prev => ({ ...prev, ...params }));
+  };
+
+  const handleSelectBruteForceResult = (text: string) => {
+    setInputText(text);
   };
 
   return (
@@ -50,7 +127,13 @@ const CaesarCipher = () => {
           </div>
         </div>
         
-        <ShiftControl shift={shift} setShift={setShift} />
+        <ModeSelector mode={cipherMode} setMode={handleModeChange} />
+        
+        <ModeParameters mode={cipherMode} onParamsChange={handleParamsChange} />
+        
+        {cipherMode === 'caesar' && (
+          <ShiftControl shift={shift} setShift={setShift} />
+        )}
         
         <TextArea 
           value={inputText}
@@ -58,6 +141,13 @@ const CaesarCipher = () => {
           placeholder={mode === 'encrypt' ? "Enter text to encrypt..." : "Enter text to decrypt..."}
           label={mode === 'encrypt' ? "Plain Text" : "Encrypted Text"}
         />
+        
+        {cipherMode === 'bruteforce' && mode === 'decrypt' && (
+          <BruteForceResults 
+            results={bruteForceResults} 
+            onSelectResult={handleSelectBruteForceResult} 
+          />
+        )}
         
         <TextArea 
           value={outputText}
